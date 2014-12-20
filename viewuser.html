@@ -1,0 +1,150 @@
+<html>
+<head>
+	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+	<link rel="stylesheet" href="http://maxcdn.bootstrapcdn.com/bootstrap/3.2.0/css/bootstrap.min.css">
+	<link href="http://maxcdn.bootstrapcdn.com/font-awesome/4.2.0/css/font-awesome.min.css" rel="stylesheet">
+	<link rel="stylesheet" href="css/growl-animate.min.css">
+	<script src="js/connect-fb.js"></script>
+	<script src="http://code.jquery.com/jquery-1.11.0.min.js"></script>
+	<script src="http://maxcdn.bootstrapcdn.com/bootstrap/3.2.0/js/bootstrap.min.js"></script>
+	<script src="js/bootstrap-growl.min.js"></script>
+	<style>
+		body{
+			margin-top:70px;
+		}
+	</style>
+	<script language="javascript">
+		var FB = new Facebook();
+		var user_id = "";
+		function getURL(name, url) {
+            if (!url) {
+                url = window.location.href;
+            }
+            var results = new RegExp('[\\?&]' + name + '=([^&#]*)').exec(url);
+            if (!results) { 
+                return 0; 
+            }
+            return results[1] || 0;
+        }     
+		function display_date(date_str){
+			function dateFromString(str) {
+				var a = $.map(str.split(/[^0-9]/), function(s) { return parseInt(s, 10) });
+				return new Date(a[0], a[1]-1 || 0, a[2] || 1, a[3] || 0, a[4] || 0, a[5] || 0, a[6] || 0);
+			}
+			function pad(n){return n<10 ? '0'+n : n}
+			mdate = dateFromString(date_str);
+			mdate.setTime(mdate.getTime()-mdate.getTimezoneOffset()*60*1000 );
+			return mdate.getDate()+"/"+(mdate.getMonth()+1)+"/"+mdate.getFullYear()+"<br>"+pad(mdate.getHours())+":"+pad(mdate.getMinutes());
+		}
+        var allthread=[];
+		function action_loadmore_user(until){
+			$("#loadmore-txt").remove();
+			$("#user-display").append("<tr id='loading-spin'><td></td><td><center><i class='fa fa-refresh fa-spin'></i></center></td><td></td></tr>");
+			until = (until)?until:"";
+			FB.api("/me/threads?fields=id,participants,message_count&limit=25&until="+until,function(res){
+				var txt="";
+                allthread = allthread.concat(res.data);
+				if(typeof res.paging  !== 'undefined' &&typeof res.paging.next  !== 'undefined'){
+                    action_loadmore_user(getURL("until",res.paging.next)+"&__paging_token="+getURL("__paging_token",res.paging.next));
+				} else {
+                    allthread.sort(function(a, b){return b.message_count-a.message_count});
+                    allthread.forEach(function(q){
+					if(!q.participants||q.participants.data.length==1){
+						txt+="<tr><td><i class='fa fa-user fa-3x'></i></td><td>Facebook User</td><td style='text-align: right;'>"+q.message_count+"</td>";
+					}else if(q.participants.data.length==2){
+						if(q.participants.data[0].id!=user_id){
+							txt+="<tr><td><img src='https://graph.facebook.com/"+q.participants.data[0].id+"/picture' class='img-responsive'></td><td><a href='viewthread.html?id="+q.id+"'>"+q.participants.data[0].name+"</a></td><td style='text-align: right;'>"+q.message_count+"</td>";
+						}else{
+							txt+="<tr><td><img src='https://graph.facebook.com/"+q.participants.data[1].id+"/picture' class='img-responsive'></td><td><a href='viewthread.html?id="+q.id+"'>"+q.participants.data[1].name+"</a></td><td style='text-align: right;'>"+q.message_count+"</td>";						
+						}
+					}else {
+						txt+="<tr><td><i class='fa fa-users fa-3x'></i></td><td><a href='viewthread.html?id="+q.id+"'>";
+						q.participants.data.forEach(function(r){
+							if(r.id!=user_id){
+								txt+=r.name+", ";
+							}
+						});
+						txt = txt.substring(0, txt.length - 2);
+						txt+="</a></td><td style='text-align: right;'>"+q.message_count+"</td>";
+					}
+				})
+					$.growl({
+						message: '<b>All</b> contract have been loaded!'
+					},{
+						type: 'info',
+						mouse_over: "pause",
+						placement: {
+							from: "top",
+							align: "center"
+						},
+						allow_dismiss: false,
+					})
+				}
+				$("#loading-spin").remove();
+				$("#user-display").append(txt);
+			});
+		}
+		function logout(){
+			sessionStorage.removeItem("Token");
+			window.location.href = "index.html";
+		}
+		function pagemain(){
+			var token = getURL("token");
+			if(token){
+				sessionStorage.Token = token;
+			}
+			if(!sessionStorage.Token){
+				window.location.href = "index.html";
+			}
+			FB.setAccessToken(sessionStorage.Token);
+			FB.api("/me?fields=id,name",function(res){
+				if(res.error){
+					window.location.href = "index.html?error=token+expire";
+				}else{
+				user_id=res.id;
+				$("#user-name").html("<a href='https://www.facebook.com/"+res.id+"'><img src='https://graph.facebook.com/"+res.id+"/picture' width='20px' height='20pz'  style='display: inline'></img> "+res.name+"</a>");				
+				}
+			})
+			action_loadmore_user();
+		}
+		pagemain();
+	</script>
+	</head>
+<body>
+
+<nav class="navbar navbar-default navbar-fixed-top" role="navigation">
+  <div class="container-fluid">
+    <div class="navbar-header">
+      <button type="button" class="navbar-toggle" data-toggle="collapse" data-target="#bs-example-navbar-collapse-1">
+        <span class="sr-only">Toggle navigation</span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+      </button>
+      <a class="navbar-brand" href="?main"><i class="fa fa-comments-o fa-lg"></i> FB Attachments<span></a>
+    </div>
+    <div class="collapse navbar-collapse" id="bs-example-navbar-collapse-1">
+		<ul class="nav navbar-nav navbar-right">
+			<li id="user-name"></li>
+			<li><a href="javascript:logout()">Logout</a></li>
+		</ul>
+	</div>
+	</div>
+ </nav>
+<div class="container">
+		<table>
+			<table class="table table-hover col-md-6">
+				<thead>
+					<th class="col-md-1">Picture</th>
+					<th class="col-md-10">Contact</th>
+					<th class="col-md-1">Chat</th>
+				</thead>
+				<tbody id="user-display">
+					<tr id='loading-spin'><td></td><td><center><i class='fa fa-refresh fa-spin'></i></center></td><td></td></tr>
+				</tbody>
+			</table>
+		</table>
+</div>
+
+</body>
+</html>
